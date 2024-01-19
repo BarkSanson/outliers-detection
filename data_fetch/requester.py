@@ -52,3 +52,5 @@ class Requester:
                 index=False)
 
         print('Done!')
+
+        return df

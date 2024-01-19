@@ -15,6 +15,7 @@ MONTHS = 3
 
 def main():
     os.makedirs(PLOTS_PATH, exist_ok=True)
+
     for station in STATIONS:
         df = pd.read_csv(os.path.join(DATA_PATH, f"{station}.csv"))
         df["dateTime"] = pd.to_datetime(df["dateTime"])
