@@ -1,15 +1,27 @@
-from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 
 
-class Tuner:
-    def __init__(self, model, df, **kwargs):
-        self.model = model
+class Trainer:
+    def __init__(self, df):
+        self.available_models = {
+            "iforest": IsolationForest,
+            "lof": LocalOutlierFactor
+        }
         self.df = df
-        self.kwargs = kwargs
+        self.trained_models = {}
 
-        self.tuner = GridSearchCV(self.model, self.kwargs, n_jobs=-1)
+    def fit(self, name, **kwargs):
+        if name not in self.available_models:
+            raise ValueError(f"Model {name} not available. Available models: {self.available_models.keys()}")
 
-    def tune(self):
-        self.tuner.fit(self.df)
+        if name in self.trained_models:
+            return self.trained_models[name]
 
-        return self.tuner.best_params_, self.tuner.best_estimator_
+        model = self.available_models[name](**kwargs)
+        model.fit(self.df)
+
+        self.trained_models[model] = model
+
+        return model
+
