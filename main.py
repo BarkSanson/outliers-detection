@@ -2,18 +2,22 @@ import argparse
 import os
 import sys
 import datetime
-
-import numpy as np
+from itertools import product
 
 from data_fetch import Requester
 from plotting import Plotter
 from models import Trainer
+from config import ConfigReader
 
 
 def main():
     args = parse_args()
-    stations, start_date, end_date, data_path, plot_path, plot_data = (
-        args.stations, args.start_date, args.end_date, args.data_path, args.plot_path, args.plot_data)
+    stations, start_date, end_date, data_path, plot_path, plot_data, config_path = (
+        args.stations, args.start_date, args.end_date, args.data_path, args.plot_path, args.plot_data, args.config_path)
+
+    config_reader = ConfigReader(config_path)
+
+    models = config_reader.read()
 
     start_date, end_date = parse_dates(start_date, end_date)
 
@@ -34,29 +38,19 @@ def main():
 
         trainer = Trainer(df)
 
-        n_neighbors = range(5, 100, 10)
-        contamination = np.arange(0.01, 0.5, 0.05)
+        for model in models:
+            param_combinations = list(product(*model.params.values()))
 
-        for n in n_neighbors:
-            title = f"{station} LOF outliers with {n} neighbors"
+            for params in param_combinations:
+                title = f"{station} {model.name} outliers with {params}"
+                if os.path.exists(os.path.join(station_path, f'{title}.png')):
+                    print(f'{title} already exists')
+                    continue
 
-            if os.path.exists(os.path.join(station_path, f'{title}.png')):
-                print(f'{title} already exists')
-                continue
+                results = trainer.fit(model.name, **dict(zip(model.params.keys(), params)))
+                labels = results[1]
+                plotter.plot_predictions(title, 'value', labels)
 
-            results = trainer.fit_models(lof={'n_neighbors': n, 'n_jobs': -1})
-            labels = results['lof'][1]
-            plotter.plot_predictions(f"{station} LOF outliers with {n} neighbors", 'value', labels)
-
-        for c in contamination:
-            title = f"{station} iForest outliers with {c} contamination"
-            if os.path.exists(os.path.join(station_path, f'{title}.png')):
-                print(f'{title} already exists')
-                continue
-
-            results = trainer.fit_models(iforest={'contamination': c, 'n_jobs': -1})
-            labels = results['iforest'][1]
-            plotter.plot_predictions(f"{station} iForest outliers with {c} contamination", 'value', labels)
 
 def parse_dates(start_date, end_date):
     try:
@@ -87,9 +81,9 @@ def parse_dates(start_date, end_date):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--stations", nargs="+", type=str, help="Station names", required=True)
     parser.add_argument("start_date", type=str, help="Start date")
     parser.add_argument("end_date", type=str, help="End date")
+    parser.add_argument("-s", "--stations", nargs="+", type=str, help="Station names", required=True)
     parser.add_argument("-d",
                         "--data_path",
                         type=str,
@@ -101,8 +95,13 @@ def parse_args():
                         default=os.getcwd())
     parser.add_argument("-P",
                         "--plot_data",
-                        help="Plot data",
+                        help="Set this to true if you want to plot the data in your browser with interactive plots",
                         action="store_true")
+    parser.add_argument("-c",
+                        "--config_path",
+                        type=str,
+                        help="Path to config file",
+                        required=True)
 
     return parser.parse_args()
 
