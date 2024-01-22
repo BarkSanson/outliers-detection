@@ -19,9 +19,11 @@ class Trainer:
             return self.trained_models[name]
 
         model = self.available_models[name](**kwargs)
-        model.fit(self.df)
-
         self.trained_models[model] = model
 
-        return model
+        if name == "lof":
+            model.fit_predict(self.df)
+        else:
+            model.fit(self.df)
 
+        return model

@@ -5,6 +5,7 @@ import datetime
 
 from data_fetch import Requester
 from plotting import Plotter
+from models import Trainer
 
 
 def main():
@@ -18,12 +19,20 @@ def main():
 
     dfs = requester.do_request()
 
-    if plot_data:
-        for station, df in dfs.items():
-            plotter = Plotter(df, plot_path)
-            plotter.plot_data(df, 'value', f'{station} water level')
+    for station, df in dfs.items():
+        plotter = Plotter(df, plot_path)
 
-    # TODO: Train models
+        if plot_data:
+            plotter.plot_data(df, 'value', f'{station} water level', 'quality')
+
+        df = df.drop(columns=['quality'])
+
+        trainer = Trainer(df)
+        iforest = trainer.fit('iforest', n_estimators=100, n_jobs=-1)
+        lof = trainer.fit('lof', n_neighbors=10, contamination=0.1)
+
+        plotter.plot_predictions(f"{station} iForest outliers", 'value', iforest.predict(df))
+        plotter.plot_predictions(f"{station} LOF outliers", 'value', lof.negative_outlier_factor_)
 
 
 def parse_dates(start_date, end_date):

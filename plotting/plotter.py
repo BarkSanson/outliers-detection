@@ -1,22 +1,21 @@
+import os
+
 import plotly.express as px
 
 
 class Plotter:
-    def __init__(self, df, plot_path, predictions=None, model=None):
-        self.model = model
+    def __init__(self, df, plot_path):
         self.plot_path = plot_path
         self.df = df
-        self.predictions = predictions
 
-    def plot_predictions(self, target):
-        if self.model is None:
-            print('No model to predict with')
-            return
+        os.makedirs(self.plot_path, exist_ok=True)
 
-        predictions = self.predictions if self.predictions is not None else self.model.predict(self.df)
-        fig = px.scatter(self.df, x=self.df.index, y=target, color=predictions, opacity=1)
+    def plot_predictions(self, title, target, predictions):
+        fig = px.scatter(self.df, x=self.df.index, y=target, color=predictions, opacity=1, title=title)
+        fig.write_image(os.path.join(self.plot_path, f'{title}.png'))
         fig.show()
 
-    def plot_data(self, df, target, title):
-        fig = px.line(df, x=self.df.index, y=target, title=title)
-        fig.write_image(f'{title}.svg')
+    def plot_data(self, df, target, title, color=None):
+        fig = px.line(df, x=self.df.index, y=target, title=title, color=color)
+        fig.write_image(os.path.join(self.plot_path, f'{title}.png'))
+        fig.show()

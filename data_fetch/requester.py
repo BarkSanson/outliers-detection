@@ -21,6 +21,8 @@ class Requester:
         self._start_date = start_date
         self._end_date = end_date
 
+        os.makedirs(self._data_path, exist_ok=True)
+
     def do_request(self):
         dfs = {}
         for station_name in self._station_names:
@@ -38,7 +40,12 @@ class Requester:
                 f'{processed_station_name}_{self._start_date}_{self._end_date}.csv')
             if os.path.exists(data_path):
                 print(f'Data already exists between {self._start_date} and {self._end_date} for {station_name}')
+
                 df = pd.read_csv(data_path)
+
+                df['dateTime'] = pd.to_datetime(df['dateTime'])
+                df = df.set_index('dateTime')
+
                 dfs[station_name] = df
                 continue
 
@@ -47,13 +54,19 @@ class Requester:
 
             df = pd.read_csv(StringIO(res.text))
 
-            df = df.drop(columns=['measure'])
+            df = df.drop(columns=['measure', 'completeness', 'qcode', 'date'])
+
+            df['dateTime'] = pd.to_datetime(df['dateTime'])
+            df = df.set_index('dateTime')
+
+            # TODO: Remove this
+            df = df.dropna(subset=['value'])
 
             df.to_csv(
                 os.path.join(
                     self._data_path,
                     f'{processed_station_name}_{self._start_date}_{self._end_date}.csv'),
-                    index=False)
+                    index=True)
 
             dfs[station_name] = df
 
