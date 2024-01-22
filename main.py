@@ -3,6 +3,8 @@ import os
 import sys
 import datetime
 
+import numpy as np
+
 from data_fetch import Requester
 from plotting import Plotter
 from models import Trainer
@@ -20,7 +22,10 @@ def main():
     dfs = requester.do_request()
 
     for station, df in dfs.items():
-        plotter = Plotter(df, plot_path)
+        station_path = os.path.join(plot_path, station)
+        os.makedirs(station_path, exist_ok=True)
+
+        plotter = Plotter(df, station_path)
 
         if plot_data:
             plotter.plot_data(df, 'value', f'{station} water level', 'quality')
@@ -28,12 +33,30 @@ def main():
         df = df.drop(columns=['quality'])
 
         trainer = Trainer(df)
-        iforest = trainer.fit('iforest', n_estimators=100, n_jobs=-1)
-        lof = trainer.fit('lof', n_neighbors=10, contamination=0.1)
 
-        plotter.plot_predictions(f"{station} iForest outliers", 'value', iforest.predict(df))
-        plotter.plot_predictions(f"{station} LOF outliers", 'value', lof.negative_outlier_factor_)
+        n_neighbors = range(5, 100, 10)
+        contamination = np.arange(0.01, 0.5, 0.05)
 
+        for n in n_neighbors:
+            title = f"{station} LOF outliers with {n} neighbors"
+
+            if os.path.exists(os.path.join(station_path, f'{title}.png')):
+                print(f'{title} already exists')
+                continue
+
+            results = trainer.fit_models(lof={'n_neighbors': n, 'n_jobs': -1})
+            labels = results['lof'][1]
+            plotter.plot_predictions(f"{station} LOF outliers with {n} neighbors", 'value', labels)
+
+        for c in contamination:
+            title = f"{station} iForest outliers with {c} contamination"
+            if os.path.exists(os.path.join(station_path, f'{title}.png')):
+                print(f'{title} already exists')
+                continue
+
+            results = trainer.fit_models(iforest={'contamination': c, 'n_jobs': -1})
+            labels = results['iforest'][1]
+            plotter.plot_predictions(f"{station} iForest outliers with {c} contamination", 'value', labels)
 
 def parse_dates(start_date, end_date):
     try:
