@@ -21,3 +21,5 @@ python main.py <start-date> <end-date> -s [station_name1, station_name2, ...]
 The station names must be the names of the stations as they appear on the
 [map](https://environment.data.gov.uk/hydrology/landing). If the station name is separated by spaces, 
 it must be enclosed in quotes.
+
+You can run `python main.py -h` to see the available parameters.
