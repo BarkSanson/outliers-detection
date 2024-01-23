@@ -26,7 +26,7 @@ def main():
     dfs = requester.do_request()
 
     for station, df in dfs.items():
-        station_path = os.path.join(plot_path, station)
+        station_path = os.path.join(plot_path, station.replace(' ', ''))
         os.makedirs(station_path, exist_ok=True)
 
         plotter = Plotter(df, station_path)
