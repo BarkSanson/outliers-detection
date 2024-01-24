@@ -17,6 +17,15 @@ from models import Trainer
 from config import ConfigReader
 
 
+def custom_accuracy_score(y_true, y_pred):
+    # Count the number of outliers that were correctly predicted
+    correct_outliers = len(y_true[(y_true == -1) & (y_pred == -1)])
+
+    score = correct_outliers / len(y_true[y_true == -1])
+
+    return score
+
+
 def main():
     args = parse_args()
     stations, start_date, end_date, data_path, results_path, plot_data, config_path = (
@@ -68,7 +77,7 @@ def main():
                 _, labels = trainer.fit(model.name, **kwargs)
                 print(f"Done fitting {model.name} with {kwargs} for {station}!")
 
-                accuracy = accuracy_score(df['outlier'], labels)
+                accuracy = custom_accuracy_score(df['outlier'], labels)
 
                 if model.name not in results:
                     results[model.name] = []
@@ -140,7 +149,8 @@ def main():
 
             sns.scatterplot(data=agrees, x=agrees.index, y='value', hue='all_models_agree', palette={1: "red"})
 
-            plt.savefig(os.path.join(time_series_path, f'{station} {start.date()} to {intervals[i].date()} time series.png'))
+            plt.savefig(
+                os.path.join(time_series_path, f'{station} {start.date()} to {intervals[i].date()} time series.png'))
             start = intervals[i]
 
             plt.clf()
