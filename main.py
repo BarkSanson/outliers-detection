@@ -111,7 +111,7 @@ def main():
             plt.savefig(os.path.join(confusion_matrices_path, f'{station} best {model} confusion matrix.png'))
             plt.clf()
 
-        intervals = pd.date_range(start_date, end_date, freq='1M')
+        intervals = pd.date_range(start_date, end_date, freq='1W')
 
         df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
             lambda x: 1 if all(x == -1) else 0, axis=1)
@@ -125,17 +125,20 @@ def main():
 
             agrees = interval[interval['all_models_agree'] == 1]
 
-            sns.lineplot(data=interval, x=interval.index, y='value')
+            sns.lineplot(data=interval, x=interval.index, y='value', color="green")
 
-            for model in models:
+            colors = ["orange", "blue"]
+            for model, color in zip(models, colors):
                 outliers_model = interval[interval[f'best_{model.name}_predictions'] == -1]
                 sns.scatterplot(
                     data=outliers_model,
                     x=outliers_model.index,
                     y='value',
-                    hue=f'best_{model.name}_predictions')
+                    hue=f'best_{model.name}_predictions',
+                    palette={-1: color}
+                )
 
-            sns.scatterplot(data=agrees, x=agrees.index, y='value', hue='all_models_agree')
+            sns.scatterplot(data=agrees, x=agrees.index, y='value', hue='all_models_agree', palette={1: "red"})
 
             plt.savefig(os.path.join(time_series_path, f'{station} {start.date()} to {intervals[i].date()} time series.png'))
             start = intervals[i]
