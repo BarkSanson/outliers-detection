@@ -5,8 +5,9 @@ import datetime
 from itertools import product
 
 import tabulate
+import seaborn as sns
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 from data_fetch import Requester
 from plotting import Plotter
@@ -48,7 +49,7 @@ def main():
         df['outlier'] = z_scores.map(lambda x: -1 if abs(x) > 3 else 1)
 
         trainer = Trainer(df)
-        results = []
+        results = {}
         for model in models:
             param_combinations = list(product(*model.params.values()))
 
@@ -67,12 +68,23 @@ def main():
 
                 accuracy = accuracy_score(df['outlier'], labels)
 
-                results.append((model.name, params, accuracy))
+                if model.name not in results:
+                    results[model.name] = []
 
-        results.sort(key=lambda x: x[2], reverse=True)
+                results[model.name].append((model.name, params, labels, accuracy))
 
-        with open(os.path.join(station_path, 'results.txt'), 'w') as f:
-            f.write(tabulate.tabulate(results, headers=['Model', 'Params', 'Accuracy']))
+        for model, results in results.items():
+            results.sort(key=lambda x: x[2], reverse=True)
+
+            with open(os.path.join(station_path, 'results.txt'), 'w') as f:
+                f.write(tabulate.tabulate(results, headers=['Model', 'Params', 'Accuracy']))
+
+        # Take the best model of each type and plot their confusion matrix
+        for model, results in results.items():
+            best_model = results[0]
+
+            cf_matrix = confusion_matrix(best_model[2], df['outlier'])
+            sns.heatmap(cf_matrix, annot=True, cmap='Blues', fmt='g')
 
 
 def parse_dates(start_date, end_date):
