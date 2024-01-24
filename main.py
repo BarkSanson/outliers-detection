@@ -5,6 +5,7 @@ import datetime
 from itertools import product
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import tabulate
 import seaborn as sns
 
@@ -18,8 +19,9 @@ from config import ConfigReader
 
 def main():
     args = parse_args()
-    stations, start_date, end_date, data_path, plot_path, plot_data, config_path = (
-        args.stations, args.start_date, args.end_date, args.data_path, args.plot_path, args.plot_data, args.config_path)
+    stations, start_date, end_date, data_path, results_path, plot_data, config_path = (
+        args.stations, args.start_date, args.end_date, args.data_path, args.results_path, args.plot_data,
+        args.config_path)
 
     config_reader = ConfigReader(config_path)
 
@@ -32,7 +34,7 @@ def main():
     dfs = requester.do_request()
 
     for station, df in dfs.items():
-        station_path = os.path.join(plot_path, station.replace(' ', ''))
+        station_path = os.path.join(results_path, station.replace(' ', ''))
         os.makedirs(station_path, exist_ok=True)
 
         plotter = Plotter(df, station_path)
@@ -65,28 +67,80 @@ def main():
                 print(f"Fitting {model.name} with {kwargs} for {station}...")
                 _, labels = trainer.fit(model.name, **kwargs)
                 print(f"Done fitting {model.name} with {kwargs} for {station}!")
-                df[f'predicted_outlier_{model.name}_{params}'] = labels
 
                 accuracy = accuracy_score(df['outlier'], labels)
 
                 if model.name not in results:
                     results[model.name] = []
 
-                results[model.name].append((model.name, params, labels, accuracy))
+                results[model.name].append((labels, *params, accuracy))
 
-        for model, results in results.items():
-            results.sort(key=lambda x: x[3], reverse=True)
+        # Create a table with the accuracy of each model
+        for model, res in results.items():
+            accuracy_path = os.path.join(station_path, "accuracies")
+            os.makedirs(accuracy_path, exist_ok=True)
 
-            with open(os.path.join(station_path, 'results.txt'), 'w') as f:
-                f.write(tabulate.tabulate(results, headers=['Model', 'Params', 'Accuracy']))
+            res.sort(key=lambda x: x[-1], reverse=True)
+
+            current_model = filter(lambda x: x.name == model, models)
+            model_params = next(current_model).params
+
+            params_names = list(model_params.keys())
+
+            # Map the results to a list of lists, where each list is a row in the table
+            data = list(map(lambda x: [*x[1:-1], x[-1]], res))
+
+            with open(os.path.join(accuracy_path, f'{model}.txt'), 'w') as f:
+                # Write a table that has the accuracy and the parameters used, but not the labels
+                f.write(tabulate.tabulate(data, headers=[*params_names, 'Accuracy'], tablefmt='orgtbl'))
 
         # Take the best model of each type and plot their confusion matrix
-        for model, results in results.items():
-            best_model = results[0]
+        for model, res in results.items():
+            confusion_matrices_path = os.path.join(station_path, "confusion_matrices")
+            os.makedirs(confusion_matrices_path, exist_ok=True)
+            best_model = res[0]
 
-            cf_matrix = confusion_matrix(best_model[2], df['outlier'])
-            sns.heatmap(cf_matrix, annot=True, cmap='Blues', fmt='g')
-            plt.savefig(os.path.join(station_path, f'{station} {model} confusion matrix.png'))
+            df[f'best_{model}_predictions'] = best_model[0]
+
+            predicted = list(map(lambda x: 'Outlier' if x == -1 else 'Inlier', best_model[0]))
+            actual = df['outlier'].map(lambda x: 'Outlier' if x == -1 else 'Inlier')
+
+            cf_matrix = confusion_matrix(actual, predicted, labels=["Outlier", "Inlier"])
+            sns.heatmap(cf_matrix, annot=True, cmap='Blues', fmt='g', xticklabels=['Outlier', 'Inlier'],
+                        yticklabels=['Outlier', 'Inlier'])
+            plt.savefig(os.path.join(confusion_matrices_path, f'{station} best {model} confusion matrix.png'))
+            plt.clf()
+
+        intervals = pd.date_range(start_date, end_date, freq='1M')
+
+        df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
+            lambda x: 1 if all(x == -1) else 0, axis=1)
+
+        time_series_path = os.path.join(station_path, "time_series")
+        os.makedirs(time_series_path, exist_ok=True)
+
+        start = start_date
+        for i in range(len(intervals) - 1):
+            interval = df[start:intervals[i]]
+
+            agrees = interval[interval['all_models_agree'] == 1]
+
+            sns.lineplot(data=interval, x=interval.index, y='value')
+
+            for model in models:
+                outliers_model = interval[interval[f'best_{model.name}_predictions'] == -1]
+                sns.scatterplot(
+                    data=outliers_model,
+                    x=outliers_model.index,
+                    y='value',
+                    hue=f'best_{model.name}_predictions')
+
+            sns.scatterplot(data=agrees, x=agrees.index, y='value', hue='all_models_agree')
+
+            plt.savefig(os.path.join(time_series_path, f'{station} {start.date()} to {intervals[i].date()} time series.png'))
+            start = intervals[i]
+
+            plt.clf()
 
 
 def parse_dates(start_date, end_date):
@@ -126,11 +180,11 @@ def parse_args():
                         type=str,
                         help="Path to data folder. Current working directory by default",
                         default=os.getcwd())
-    parser.add_argument("-p",
-                        "--plot_path",
-                        help="Path to store plots. Current working directory by default",
+    parser.add_argument("-r",
+                        "--results_path",
+                        help="Path to store results, both plots and tables. Current working directory by default",
                         default=os.getcwd())
-    parser.add_argument("-P",
+    parser.add_argument("-p",
                         "--plot_data",
                         help="Set this to true if you want to plot the data in your browser with interactive plots",
                         action="store_true")
