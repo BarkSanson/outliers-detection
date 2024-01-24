@@ -1,6 +1,10 @@
 import os
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 import plotly.express as px
+import plotly.graph_objects as go
 
 
 class Plotter:
@@ -10,16 +14,15 @@ class Plotter:
 
         os.makedirs(self.plot_path, exist_ok=True)
 
-    def plot_predictions(self, title, target, predictions, show=False):
-        fig = px.scatter(self.df, x=self.df.index, y=target, color=predictions, opacity=1, title=title)
+    def plot_predictions(self, title, target, predictions):
+        plt.figure(figsize=(20, 10))
+        sns.lineplot(data=self.df, x=self.df.index, y=target)
+        sns.scatterplot(data=predictions, x=predictions.index, y=target, color='red', markers='o', label='Outliers')
+        plt.title(title)
+        plt.show()
+
+    def plot_data(self, target, title, color=None):
+        fig = px.line(self.df, x=self.df.index, y=target, title=title, color=color)
         fig.write_image(os.path.join(self.plot_path, f'{title}.png'))
 
-        if show:
-            fig.show()
-
-    def plot_data(self, df, target, title, color=None, show=False):
-        fig = px.line(df, x=self.df.index, y=target, title=title, color=color)
-        fig.write_image(os.path.join(self.plot_path, f'{title}.png'))
-
-        if show:
-            fig.show()
+        fig.show()

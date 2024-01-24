@@ -4,6 +4,10 @@ import sys
 import datetime
 from itertools import product
 
+import tabulate
+
+from sklearn.metrics import accuracy_score
+
 from data_fetch import Requester
 from plotting import Plotter
 from models import Trainer
@@ -32,12 +36,19 @@ def main():
         plotter = Plotter(df, station_path)
 
         if plot_data:
-            plotter.plot_data(df, 'value', f'{station} water level', 'quality')
+            plotter.plot_data('value', f'{station} water level', 'quality')
 
         df = df.drop(columns=['quality'])
 
-        trainer = Trainer(df)
+        # Mark outliers
+        z_scores = (df - df.mean()) / df.std()
 
+        # If z_score is greater than 3, it is an outlier, but we want to mark the outliers as -1 and
+        # the inliers as 1
+        df['outlier'] = z_scores.map(lambda x: -1 if abs(x) > 3 else 1)
+
+        trainer = Trainer(df)
+        results = []
         for model in models:
             param_combinations = list(product(*model.params.values()))
 
@@ -47,9 +58,21 @@ def main():
                     print(f'{title} already exists')
                     continue
 
-                results = trainer.fit(model.name, **dict(zip(model.params.keys(), params)))
-                labels = results[1]
-                plotter.plot_predictions(title, 'value', labels)
+                kwargs = dict(zip(model.params.keys(), params))
+
+                print(f"Fitting {model.name} with {kwargs} for {station}...")
+                _, labels = trainer.fit(model.name, **kwargs)
+                print(f"Done fitting {model.name} with {kwargs} for {station}!")
+                df[f'predicted_outlier_{model.name}_{params}'] = labels
+
+                accuracy = accuracy_score(df['outlier'], labels)
+
+                results.append((model.name, params, accuracy))
+
+        results.sort(key=lambda x: x[2], reverse=True)
+
+        with open(os.path.join(station_path, 'results.txt'), 'w') as f:
+            f.write(tabulate.tabulate(results, headers=['Model', 'Params', 'Accuracy']))
 
 
 def parse_dates(start_date, end_date):

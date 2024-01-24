@@ -70,6 +70,6 @@ class Requester:
 
             dfs[station_name] = df
 
-        print('Done!')
+        print('Done requesting data!')
 
         return dfs
