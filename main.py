@@ -4,6 +4,7 @@ import sys
 import datetime
 from itertools import product
 
+import matplotlib.pyplot as plt
 import tabulate
 import seaborn as sns
 
@@ -85,6 +86,7 @@ def main():
 
             cf_matrix = confusion_matrix(best_model[2], df['outlier'])
             sns.heatmap(cf_matrix, annot=True, cmap='Blues', fmt='g')
+            plt.savefig(os.path.join(station_path, f'{station} {model} confusion matrix.png'))
 
 
 def parse_dates(start_date, end_date):
