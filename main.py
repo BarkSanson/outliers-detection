@@ -75,7 +75,7 @@ def main():
                 results[model.name].append((model.name, params, labels, accuracy))
 
         for model, results in results.items():
-            results.sort(key=lambda x: x[2], reverse=True)
+            results.sort(key=lambda x: x[3], reverse=True)
 
             with open(os.path.join(station_path, 'results.txt'), 'w') as f:
                 f.write(tabulate.tabulate(results, headers=['Model', 'Params', 'Accuracy']))
