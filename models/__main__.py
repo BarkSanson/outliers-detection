@@ -5,8 +5,6 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 
-from plotting.plotter import Plotter
-
 DATA_PATH = os.path.join(os.path.pardir, "data")
 
 TEST_SIZE = 0.3

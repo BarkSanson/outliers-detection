@@ -3,7 +3,7 @@
     "name": "iforest",
     "params": {
       "n_estimators": [100, 200],
-      "contamination": ["auto"],
+      "contamination": [0.1],
       "bootstrap": [true],
       "n_jobs": [-1]
     }
@@ -12,7 +12,7 @@
     "name": "lof",
     "params": {
       "n_neighbors": [5],
-      "contamination": ["auto", 0.1, 0.2],
+      "contamination": [0.1, 0.2],
       "n_jobs": [-1]
     }
   }

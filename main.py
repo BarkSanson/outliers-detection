@@ -4,23 +4,20 @@ import sys
 import datetime
 from itertools import product
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import tabulate
-import seaborn as sns
 
 from sklearn.metrics import precision_score, f1_score, recall_score, confusion_matrix
 
 from data_fetch import Requester
-from plotting import Plotter
 from models import Trainer
 from config import ConfigReader
+from data_show import Plotter, Printer
 
 
 def scores(y_true, y_pred):
-    precision = precision_score(y_true, y_pred, pos_label=-1)
-    recall = recall_score(y_true, y_pred, pos_label=-1)
-    f1 = f1_score(y_true, y_pred, pos_label=-1)
+    precision = precision_score(y_true, y_pred, pos_label=1)
+    recall = recall_score(y_true, y_pred, pos_label=1)
+    f1 = f1_score(y_true, y_pred, pos_label=1)
 
     return precision, recall, f1
 
@@ -45,7 +42,10 @@ def main():
         station_path = os.path.join(results_path, station.replace(' ', ''))
         os.makedirs(station_path, exist_ok=True)
 
-        plotter = Plotter(df, station_path)
+        plots_path = os.path.join(station_path, 'plots')
+
+        printer = Printer(station_path)
+        plotter = Plotter(df, plots_path)
 
         if plot_data:
             plotter.plot_data('value', f'{station} water level', 'quality')
@@ -57,7 +57,7 @@ def main():
 
         # If z_score is greater than 3, it is an outlier, but we want to mark the outliers as -1 and
         # the inliers as 1
-        df['outlier'] = z_scores.map(lambda x: -1 if abs(x) > 3 else 1)
+        df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
 
         trainer = Trainer(df)
         results = {}
@@ -83,76 +83,26 @@ def main():
 
                 results[model.name].append((labels, *params, precision, recall, f1))
 
-        # Create a table with the accuracy of each model
-        for model, res in results.items():
-            accuracy_path = os.path.join(station_path, "scores")
-            os.makedirs(accuracy_path, exist_ok=True)
-
-            res.sort(key=lambda x: x[-1], reverse=True)
-
-            current_model = filter(lambda x: x.name == model, models)
-            model_params = next(current_model).params
-
-            params_names = list(model_params.keys())
-
-            # Map the results to a list of lists, where each list is a row in the table
-            data = list(map(lambda x: [*x[1:-1], x[-1]], res))
-
-            with open(os.path.join(accuracy_path, f'{model}.txt'), 'w') as f:
-                # Write a table that has the accuracy and the parameters used, but not the labels
-                f.write(tabulate.tabulate(data, headers=[*params_names, 'Precision', 'Recall', 'F1 score'], tablefmt='orgtbl'))
+        printer.print_scores(models, results)
 
         # Take the best model of each type and plot their confusion matrix
         for model, res in results.items():
-            confusion_matrices_path = os.path.join(station_path, "confusion_matrices")
-            os.makedirs(confusion_matrices_path, exist_ok=True)
             best_model = res[0]
 
             df[f'best_{model}_predictions'] = best_model[0]
 
-            predicted = list(map(lambda x: 'Outlier' if x == -1 else 'Inlier', best_model[0]))
-            actual = df['outlier'].map(lambda x: 'Outlier' if x == -1 else 'Inlier')
+            predicted = list(map(lambda x: 'Outlier' if x == 1 else 'Inlier', best_model[0]))
+            actual = df['outlier'].map(lambda x: 'Outlier' if x == 1 else 'Inlier')
 
             cf_matrix = confusion_matrix(actual, predicted, labels=["Outlier", "Inlier"])
-            sns.heatmap(cf_matrix, annot=True, cmap='Blues', fmt='g', xticklabels=['Outlier', 'Inlier'],
-                        yticklabels=['Outlier', 'Inlier'])
-            plt.savefig(os.path.join(confusion_matrices_path, f'{station} best {model} confusion matrix.png'))
-            plt.clf()
 
-        intervals = pd.date_range(start_date, end_date, freq='1W')
+            plotter.plot_confusion_matrix(station, model, cf_matrix)
 
         df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
-            lambda x: 1 if all(x == -1) else 0, axis=1)
+            lambda x: 1 if all(x == 1) else 0, axis=1)
 
-        time_series_path = os.path.join(station_path, "time_series")
-        os.makedirs(time_series_path, exist_ok=True)
-
-        start = start_date
-        for i in range(len(intervals) - 1):
-            interval = df[start:intervals[i]]
-
-            agrees = interval[interval['all_models_agree'] == 1]
-
-            sns.lineplot(data=interval, x=interval.index, y='value', color="green")
-
-            colors = ["orange", "blue"]
-            for model, color in zip(models, colors):
-                outliers_model = interval[interval[f'best_{model.name}_predictions'] == -1]
-                sns.scatterplot(
-                    data=outliers_model,
-                    x=outliers_model.index,
-                    y='value',
-                    hue=f'best_{model.name}_predictions',
-                    palette={-1: color}
-                )
-
-            sns.scatterplot(data=agrees, x=agrees.index, y='value', hue='all_models_agree', palette={1: "red"})
-
-            plt.savefig(
-                os.path.join(time_series_path, f'{station} {start.date()} to {intervals[i].date()} time series.png'))
-            start = intervals[i]
-
-            plt.clf()
+        intervals = pd.date_range(start_date, end_date, freq='1W')
+        plotter.plot_coincidences(df, station, models, start_date, intervals)
 
 
 def parse_dates(start_date, end_date):
