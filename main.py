@@ -9,7 +9,7 @@ import pandas as pd
 import tabulate
 import seaborn as sns
 
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import precision_score, f1_score, recall_score, confusion_matrix
 
 from data_fetch import Requester
 from plotting import Plotter
@@ -17,13 +17,12 @@ from models import Trainer
 from config import ConfigReader
 
 
-def custom_accuracy_score(y_true, y_pred):
-    # Count the number of outliers that were correctly predicted
-    correct_outliers = len(y_true[(y_true == -1) & (y_pred == -1)])
+def scores(y_true, y_pred):
+    precision = precision_score(y_true, y_pred, pos_label=-1)
+    recall = recall_score(y_true, y_pred, pos_label=-1)
+    f1 = f1_score(y_true, y_pred, pos_label=-1)
 
-    score = correct_outliers / len(y_true[y_true == -1])
-
-    return score
+    return precision, recall, f1
 
 
 def main():
@@ -77,16 +76,16 @@ def main():
                 _, labels = trainer.fit(model.name, **kwargs)
                 print(f"Done fitting {model.name} with {kwargs} for {station}!")
 
-                accuracy = custom_accuracy_score(df['outlier'], labels)
+                precision, recall, f1 = scores(df['outlier'], labels)
 
                 if model.name not in results:
                     results[model.name] = []
 
-                results[model.name].append((labels, *params, accuracy))
+                results[model.name].append((labels, *params, precision, recall, f1))
 
         # Create a table with the accuracy of each model
         for model, res in results.items():
-            accuracy_path = os.path.join(station_path, "accuracies")
+            accuracy_path = os.path.join(station_path, "scores")
             os.makedirs(accuracy_path, exist_ok=True)
 
             res.sort(key=lambda x: x[-1], reverse=True)
@@ -101,7 +100,7 @@ def main():
 
             with open(os.path.join(accuracy_path, f'{model}.txt'), 'w') as f:
                 # Write a table that has the accuracy and the parameters used, but not the labels
-                f.write(tabulate.tabulate(data, headers=[*params_names, 'Accuracy'], tablefmt='orgtbl'))
+                f.write(tabulate.tabulate(data, headers=[*params_names, 'Precision', 'Recall', 'F1 score'], tablefmt='orgtbl'))
 
         # Take the best model of each type and plot their confusion matrix
         for model, res in results.items():
