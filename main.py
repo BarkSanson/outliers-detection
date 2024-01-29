@@ -6,7 +6,7 @@ from itertools import product
 
 import pandas as pd
 
-from sklearn.metrics import precision_score, f1_score, recall_score, confusion_matrix
+from sklearn.metrics import confusion_matrix
 
 from data_fetch import Requester
 from models import Trainer, Serializer
@@ -14,12 +14,11 @@ from config import ConfigReader
 from data_show import Plotter, Printer
 
 
-def scores(y_true, y_pred):
-    precision = precision_score(y_true, y_pred, pos_label=1)
-    recall = recall_score(y_true, y_pred, pos_label=1)
-    f1 = f1_score(y_true, y_pred, pos_label=1)
+def model_scores(df):
+    outlier_score = df[df['outlier'] == 1]['score'].mean()
+    inlier_score = df[df['outlier'] == 0]['score'].mean()
 
-    return precision, recall, f1
+    return (outlier_score - inlier_score) / inlier_score
 
 
 def main():
@@ -70,53 +69,51 @@ def main():
 
             for params in param_combinations:
                 title = f"{station}_{model.name}_outliers_with_{params}"
-                # if os.path.exists(os.path.join(station_path, f'{title}.png')):
-                #    print(f'{title} already exists')
-                #    continue
 
                 # If there's a serializer, try to load the model. If there is no model
                 # with the given parameters, fit the model and save it. If there is a model
-                # with the given parameters, load it and retrieve the labels
                 kwargs = dict(zip(model.params.keys(), params))
 
-                labels = None
+                decision_scores = None
                 if serializer:
                     try:
                         serialized_model = serializer.load_model(title)
                         print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
-                        labels = serialized_model.labels_
+                        decision_scores = serialized_model.decision_scores_
                     except FileNotFoundError:
-                        labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                        decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
                 else:
-                    labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                    decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
 
-                precision, recall, f1 = scores(df['outlier'], labels)
+                df['score'] = decision_scores
+
+                score = model_scores(df)
 
                 if model.name not in results:
                     results[model.name] = []
 
-                results[model.name].append((labels, *params, precision, recall, f1))
+                results[model.name].append((decision_scores, *params, score))
 
         printer.print_scores(models, results)
 
         # Take the best model of each type and plot their confusion matrix
-        for model, res in results.items():
-            best_model = res[0]
+        #for model, res in results.items():
+        #    best_model = res[0]
 
-            df[f'best_{model}_predictions'] = best_model[0]
+        #    df[f'best_{model}_predictions'] = best_model[0]
 
-            predicted = list(map(lambda x: 'Outlier' if x == 1 else 'Inlier', best_model[0]))
-            actual = df['outlier'].map(lambda x: 'Outlier' if x == 1 else 'Inlier')
+        #    predicted = list(map(lambda x: 'Outlier' if x == 1 else 'Inlier', best_model[0]))
+        #    actual = df['outlier'].map(lambda x: 'Outlier' if x == 1 else 'Inlier')
 
-            cf_matrix = confusion_matrix(actual, predicted, labels=["Outlier", "Inlier"])
+        #    cf_matrix = confusion_matrix(actual, predicted, labels=["Outlier", "Inlier"])
 
-            plotter.plot_confusion_matrix(station, model, cf_matrix)
+        #    plotter.plot_confusion_matrix(station, model, cf_matrix)
 
-        df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
-            lambda x: 1 if all(x == 1) else 0, axis=1)
+        #df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
+        #    lambda x: 1 if all(x == 1) else 0, axis=1)
 
-        intervals = pd.date_range(start_date, end_date, freq='1W')
-        plotter.plot_coincidences(df, station, models, start_date, intervals)
+        #intervals = pd.date_range(start_date, end_date, freq='1W')
+        #plotter.plot_coincidences(df, station, models, start_date, intervals)
 
 
 def parse_dates(start_date, end_date):
@@ -147,11 +144,11 @@ def parse_dates(start_date, end_date):
 
 def fit_and_save_model(model, trainer, serializer, title, station, **params):
     print(f"Fitting {model.name} with {params} for {station}...")
-    trained_model, labels = trainer.fit(model.name, **params)
+    trained_model, decision_scores = trainer.fit(model.name, **params)
     print(f"Done fitting {model.name} with {params} for {station}!")
     serializer.save_model(trained_model, title)
 
-    return labels
+    return decision_scores
 
 
 def parse_args():

@@ -8,7 +8,7 @@ class Trainer:
         self._available_models = {
             "iforest": IForest,
             "lof": LOF,
-            "kde": KDE
+            "kde": KDE,
         }
         self._df = df
 
@@ -20,4 +20,4 @@ class Trainer:
 
         model.fit(self._df)
 
-        return model, model.labels_
+        return model, model.decision_scores_
