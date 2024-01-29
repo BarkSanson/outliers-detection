@@ -53,7 +53,7 @@ class Plotter:
 
             sns.lineplot(data=interval, x=interval.index, y='value', color="green")
 
-            colors = ["orange", "blue"]
+            colors = ["orange", "blue", "purple"]
             for model, color in zip(models, colors):
                 outliers_model = interval[interval[f'best_{model.name}_predictions'] == 1]
                 sns.scatterplot(

@@ -83,7 +83,7 @@ def main():
                 if serializer:
                     try:
                         serialized_model = serializer.load_model(title)
-                        print(f"Model {model.name} exists in {models_path}. Loading...")
+                        print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
                         labels = serialized_model.labels_
                     except FileNotFoundError:
                         labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
