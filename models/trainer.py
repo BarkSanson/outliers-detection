@@ -1,12 +1,14 @@
 from pyod.models.iforest import IForest
 from pyod.models.lof import LOF
+from pyod.models.kde import KDE
 
 
 class Trainer:
     def __init__(self, df):
         self._available_models = {
             "iforest": IForest,
-            "lof": LOF
+            "lof": LOF,
+            "kde": KDE
         }
         self._df = df
 

@@ -1,12 +1,15 @@
+import os
 import joblib
 
 
-class Serializer(object):
-    def __init__(self, model_path):
-        self.model_path = model_path
+class Serializer:
+    def __init__(self, models_path):
+        self.models_path = models_path
 
-    def load_model(self):
-        return joblib.load(self.model_path)
+        os.makedirs(models_path, exist_ok=True)
 
-    def save_model(self, model):
-        joblib.dump(model, self.model_path)
+    def load_model(self, name):
+        return joblib.load(os.path.join(self.models_path, name))
+
+    def save_model(self, model, name):
+        joblib.dump(model, os.path.join(self.models_path, name))

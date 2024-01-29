@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.metrics import precision_score, f1_score, recall_score, confusion_matrix
 
 from data_fetch import Requester
-from models import Trainer
+from models import Trainer, Serializer
 from config import ConfigReader
 from data_show import Plotter, Printer
 
@@ -24,9 +24,9 @@ def scores(y_true, y_pred):
 
 def main():
     args = parse_args()
-    stations, start_date, end_date, data_path, results_path, plot_data, config_path = (
-        args.stations, args.start_date, args.end_date, args.data_path, args.results_path, args.plot_data,
-        args.config_path)
+    stations, start_date, end_date, data_path, results_path, plot_data, config_path, models_path = (
+        args.stations, args.start_date, args.end_date, args.data_path,
+        args.results_path, args.plot_data, args.config_path, args.models_path)
 
     config_reader = ConfigReader(config_path)
 
@@ -35,6 +35,10 @@ def main():
     start_date, end_date = parse_dates(start_date, end_date)
 
     requester = Requester(stations, data_path, start_date.date(), end_date.date())
+
+    serializer = None
+    if models_path:
+        serializer = Serializer(models_path)
 
     dfs = requester.do_request()
 
@@ -65,16 +69,26 @@ def main():
             param_combinations = list(product(*model.params.values()))
 
             for params in param_combinations:
-                title = f"{station} {model.name} outliers with {params}"
-                if os.path.exists(os.path.join(station_path, f'{title}.png')):
-                    print(f'{title} already exists')
-                    continue
+                title = f"{station}_{model.name}_outliers_with_{params}"
+                # if os.path.exists(os.path.join(station_path, f'{title}.png')):
+                #    print(f'{title} already exists')
+                #    continue
 
+                # If there's a serializer, try to load the model. If there is no model
+                # with the given parameters, fit the model and save it. If there is a model
+                # with the given parameters, load it and retrieve the labels
                 kwargs = dict(zip(model.params.keys(), params))
 
-                print(f"Fitting {model.name} with {kwargs} for {station}...")
-                _, labels = trainer.fit(model.name, **kwargs)
-                print(f"Done fitting {model.name} with {kwargs} for {station}!")
+                labels = None
+                if serializer:
+                    try:
+                        serialized_model = serializer.load_model(title)
+                        print(f"Model {model.name} exists in {models_path}. Loading...")
+                        labels = serialized_model.labels_
+                    except FileNotFoundError:
+                        labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                else:
+                    labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
 
                 precision, recall, f1 = scores(df['outlier'], labels)
 
@@ -131,6 +145,15 @@ def parse_dates(start_date, end_date):
     return start_date, end_date
 
 
+def fit_and_save_model(model, trainer, serializer, title, station, **params):
+    print(f"Fitting {model.name} with {params} for {station}...")
+    trained_model, labels = trainer.fit(model.name, **params)
+    print(f"Done fitting {model.name} with {params} for {station}!")
+    serializer.save_model(trained_model, title)
+
+    return labels
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -155,6 +178,11 @@ def parse_args():
                         type=str,
                         help="Path to config file",
                         required=True)
+    parser.add_argument("-m",
+                        "--models_path",
+                        type=str,
+                        help="Path to models folder, where models will be saved and loaded from."
+                             "If not specified, models won't be saved.")
 
     return parser.parse_args()
 
