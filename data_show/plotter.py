@@ -72,7 +72,7 @@ class Plotter:
 
             plt.clf()
 
-    def print_model_outliers(self, df, outliers, model, params):
+    def plot_model_outliers(self, df, outliers, model, params):
         sns.lineplot(data=df, x=df.index, y='value')
 
         sns.scatterplot(data=outliers, x=outliers.index, y='value', color='red', markers='o', label='Outliers')

@@ -4,7 +4,7 @@ import sys
 import datetime
 from itertools import product
 
-from sklearn.metrics import recall_score, precision_score, f1_score
+from sklearn.metrics import recall_score, precision_score, f1_score, confusion_matrix
 
 from data_fetch import Requester
 from models import Trainer, Serializer
@@ -111,7 +111,10 @@ def main():
             params = tuple(best_model[1:-3])
 
             outliers = df[df[f'{model}_{params}_labels'] == 1]
-            plotter.print_model_outliers(df, outliers, model, params)
+            plotter.plot_model_outliers(df, outliers, model, params)
+
+            cf_matrix = confusion_matrix(df['outlier'], df[f'{model}_{params}_labels'])
+            plotter.plot_confusion_matrix(cf_matrix, model, params)
 
         # For each best model, print the score given to each outlier
         #best_models = []
