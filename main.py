@@ -4,19 +4,28 @@ import sys
 import datetime
 from itertools import product
 
+from sklearn.metrics import recall_score, precision_score, f1_score
+
 from data_fetch import Requester
 from models import Trainer, Serializer
 from config import ConfigReader
 from data_show import Plotter, Printer
 
 
-def model_scores(df, model, params):
-    o = df[df['outlier'] == 1]
-    i = df[df['outlier'] == 0]
-    outlier_mean = df[df['outlier'] == 1][f'{model}_{params}_score'].mean()
-    inlier_mean = df[df['outlier'] == 0][f'{model}_{params}_score'].mean()
+# def model_scores(df, model, params):
+#    o = df[df['outlier'] == 1]
+#    i = df[df['outlier'] == 0]
+#    outlier_mean = df[df['outlier'] == 1][f'{model}_{params}_score'].mean()
+#    inlier_mean = df[df['outlier'] == 0][f'{model}_{params}_score'].mean()
+#
+#    return outlier_mean - inlier_mean
 
-    return outlier_mean - inlier_mean
+def model_scores(y_true, y_pred):
+    precision = precision_score(y_true, y_pred, pos_label=1)
+    recall = recall_score(y_true, y_pred, pos_label=1)
+    f1 = f1_score(y_true, y_pred, pos_label=1)
+
+    return precision, recall, f1
 
 
 def main():
@@ -72,25 +81,25 @@ def main():
                 # with the given parameters, fit the model and save it. If there is a model
                 kwargs = dict(zip(model.params.keys(), params))
 
-                decision_scores = None
+                labels = None
                 if serializer:
                     try:
                         serialized_model = serializer.load_model(title)
                         print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
-                        decision_scores = serialized_model.decision_scores_
+                        labels = serialized_model.labels_
                     except FileNotFoundError:
-                        decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                        labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
                 else:
-                    decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                    labels = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
 
-                df[f'{model.name}_{params}_score'] = decision_scores
+                df[f'{model.name}_{params}_labels'] = labels
 
-                score = model_scores(df, model.name, params)
+                precision, recall, f1 = model_scores(df['outlier'], labels)
 
                 if model.name not in results:
                     results[model.name] = []
 
-                results[model.name].append((decision_scores, *params, score))
+                results[model.name].append((labels, *params, precision, recall, f1))
 
         for res in results.values():
             res.sort(key=lambda x: x[-1], reverse=True)
@@ -98,15 +107,14 @@ def main():
         printer.print_scores(models, results)
 
         # For each best model, print the score given to each outlier
-        best_models = []
-        for model, res in results.items():
-            best_model = res[0]
-            params = tuple(best_model[1:-1])
+        #best_models = []
+        #for model, res in results.items():
+        #    best_model = res[0]
+        #    params = tuple(best_model[1:-1])
 
-            best_models.append(f'{model}_{params}_score')
+        #    best_models.append(f'{model}_{params}_labels')
 
-        plotter.plot_outliers_score_per_model(df, best_models)
-
+        #plotter.plot_outliers_score_per_model(df, best_models)
 
 
 def parse_dates(start_date, end_date):
@@ -137,11 +145,11 @@ def parse_dates(start_date, end_date):
 
 def fit_and_save_model(model, trainer, serializer, title, station, **params):
     print(f"Fitting {model.name} with {params} for {station}...")
-    trained_model, decision_scores = trainer.fit(model.name, **params)
+    trained_model, labels = trainer.fit(model.name, **params)
     print(f"Done fitting {model.name} with {params} for {station}!")
     serializer.save_model(trained_model, title)
 
-    return decision_scores
+    return labels
 
 
 def parse_args():

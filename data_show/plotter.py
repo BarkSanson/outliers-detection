@@ -12,7 +12,6 @@ class Plotter:
         self._df = df
 
         # Change sns default style
-
         os.makedirs(self._plot_path, exist_ok=True)
 
     def plot_predictions(self, title, target, predictions):
