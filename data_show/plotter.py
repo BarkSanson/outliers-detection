@@ -72,20 +72,29 @@ class Plotter:
 
             plt.clf()
 
-    def plot_outliers_score_per_model(self, df, score_columns):
-        outliers = df[df['outlier'] == 1]
+    def print_model_outliers(self, df, outliers, model, params):
+        sns.lineplot(data=df, x=df.index, y='value')
 
-        for score_column in score_columns:
-            sns.lineplot(data=outliers, x=outliers.index, y=score_column, label=score_column)
+        sns.scatterplot(data=outliers, x=outliers.index, y='value', color='red', markers='o', label='Outliers')
 
-        # Put xlabel in vertical
-        plt.xticks(rotation=-20)
-        # Change axis labels
-        plt.xlabel('Date')
-        plt.ylabel('Score')
-
-        plt.legend()
-
-        plt.savefig(os.path.join(self._plot_path, f'outliers_score_per_model.png'))
-
+        plt.savefig(os.path.join(self._plot_path, f'{model}_{params}_outliers.png'))
         plt.clf()
+
+
+    #def plot_outliers_score_per_model(self, df, score_columns):
+    #    outliers = df[df['outlier'] == 1]
+
+    #    for score_column in score_columns:
+    #        sns.lineplot(data=outliers, x=outliers.index, y=score_column, label=score_column)
+
+    #    # Put xlabel in vertical
+    #    plt.xticks(rotation=-20)
+    #    # Change axis labels
+    #    plt.xlabel('Date')
+    #    plt.ylabel('Score')
+
+    #    plt.legend()
+
+    #    plt.savefig(os.path.join(self._plot_path, f'outliers_score_per_model.png'))
+
+    #    plt.clf()

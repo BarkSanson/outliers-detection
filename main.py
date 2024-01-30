@@ -106,6 +106,13 @@ def main():
 
         printer.print_scores(models, results)
 
+        for model, res in results.items():
+            best_model = res[0]
+            params = tuple(best_model[1:-3])
+
+            outliers = df[df[f'{model}_{params}_labels'] == 1]
+            plotter.print_model_outliers(df, outliers, model, params)
+
         # For each best model, print the score given to each outlier
         #best_models = []
         #for model, res in results.items():
