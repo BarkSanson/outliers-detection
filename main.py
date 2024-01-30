@@ -4,10 +4,6 @@ import sys
 import datetime
 from itertools import product
 
-import pandas as pd
-
-from sklearn.metrics import confusion_matrix
-
 from data_fetch import Requester
 from models import Trainer, Serializer
 from config import ConfigReader
@@ -15,10 +11,12 @@ from data_show import Plotter, Printer
 
 
 def model_scores(df):
-    outlier_score = df[df['outlier'] == 1]['score'].mean()
-    inlier_score = df[df['outlier'] == 0]['score'].mean()
+    o = df[df['outlier'] == 1]
+    i = df[df['outlier'] == 0]
+    outlier_mean = df[df['outlier'] == 1]['score'].mean()
+    inlier_mean = df[df['outlier'] == 0]['score'].mean()
 
-    return (outlier_score - inlier_score) / inlier_score
+    return outlier_mean - inlier_mean
 
 
 def main():
