@@ -10,9 +10,6 @@ class Printer:
     def print_scores(self, models, results):
         # Create a table with the accuracy of each model
         for model, res in results.items():
-
-            res.sort(key=lambda x: x[-1], reverse=True)
-
             current_model = filter(lambda x: x.name == model, models)
             model_params = next(current_model).params
 

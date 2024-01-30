@@ -4,13 +4,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 import plotly.express as px
-import plotly.graph_objects as go
 
 
 class Plotter:
     def __init__(self, df, plot_path):
         self._plot_path = plot_path
         self._df = df
+
+        # Change sns default style
 
         os.makedirs(self._plot_path, exist_ok=True)
 
@@ -71,3 +72,21 @@ class Plotter:
             start = intervals[i]
 
             plt.clf()
+
+    def plot_outliers_score_per_model(self, df, score_columns):
+        outliers = df[df['outlier'] == 1]
+
+        for score_column in score_columns:
+            sns.lineplot(data=outliers, x=outliers.index, y=score_column, label=score_column)
+
+        # Put xlabel in vertical
+        plt.xticks(rotation=-20)
+        # Change axis labels
+        plt.xlabel('Date')
+        plt.ylabel('Score')
+
+        plt.legend()
+
+        plt.savefig(os.path.join(self._plot_path, f'outliers_score_per_model.png'))
+
+        plt.clf()

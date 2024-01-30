@@ -10,11 +10,11 @@ from config import ConfigReader
 from data_show import Plotter, Printer
 
 
-def model_scores(df):
+def model_scores(df, model, params):
     o = df[df['outlier'] == 1]
     i = df[df['outlier'] == 0]
-    outlier_mean = df[df['outlier'] == 1]['score'].mean()
-    inlier_mean = df[df['outlier'] == 0]['score'].mean()
+    outlier_mean = df[df['outlier'] == 1][f'{model}_{params}_score'].mean()
+    inlier_mean = df[df['outlier'] == 0][f'{model}_{params}_score'].mean()
 
     return outlier_mean - inlier_mean
 
@@ -83,35 +83,30 @@ def main():
                 else:
                     decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
 
-                df['score'] = decision_scores
+                df[f'{model.name}_{params}_score'] = decision_scores
 
-                score = model_scores(df)
+                score = model_scores(df, model.name, params)
 
                 if model.name not in results:
                     results[model.name] = []
 
                 results[model.name].append((decision_scores, *params, score))
 
+        for res in results.values():
+            res.sort(key=lambda x: x[-1], reverse=True)
+
         printer.print_scores(models, results)
 
-        # Take the best model of each type and plot their confusion matrix
-        #for model, res in results.items():
-        #    best_model = res[0]
+        # For each best model, print the score given to each outlier
+        best_models = []
+        for model, res in results.items():
+            best_model = res[0]
+            params = tuple(best_model[1:-1])
 
-        #    df[f'best_{model}_predictions'] = best_model[0]
+            best_models.append(f'{model}_{params}_score')
 
-        #    predicted = list(map(lambda x: 'Outlier' if x == 1 else 'Inlier', best_model[0]))
-        #    actual = df['outlier'].map(lambda x: 'Outlier' if x == 1 else 'Inlier')
+        plotter.plot_outliers_score_per_model(df, best_models)
 
-        #    cf_matrix = confusion_matrix(actual, predicted, labels=["Outlier", "Inlier"])
-
-        #    plotter.plot_confusion_matrix(station, model, cf_matrix)
-
-        #df['all_models_agree'] = df[[f'best_{model.name}_predictions' for model in models]].apply(
-        #    lambda x: 1 if all(x == 1) else 0, axis=1)
-
-        #intervals = pd.date_range(start_date, end_date, freq='1W')
-        #plotter.plot_coincidences(df, station, models, start_date, intervals)
 
 
 def parse_dates(start_date, end_date):
