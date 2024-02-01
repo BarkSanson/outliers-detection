@@ -19,7 +19,6 @@ class Printer:
             data = list(map(lambda x: [*x[1:-1], x[-1]], res))
 
             with open(os.path.join(self._scores_path, f'{model}.txt'), 'w') as f:
-                # Write a table that has the accuracy and the parameters used, but not the labels
                 f.write(tabulate.tabulate(
                     data,
                     headers=[*params_names, 'Precision', 'Recall', 'F1 score'],

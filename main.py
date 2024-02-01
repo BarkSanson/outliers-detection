@@ -14,14 +14,6 @@ from data_show import Plotter, Printer
 from window_generator import WindowGenerator
 
 
-# def model_scores(df, model, params):
-#    o = df[df['outlier'] == 1]
-#    i = df[df['outlier'] == 0]
-#    outlier_mean = df[df['outlier'] == 1][f'{model}_{params}_score'].mean()
-#    inlier_mean = df[df['outlier'] == 0][f'{model}_{params}_score'].mean()
-#
-#    return outlier_mean - inlier_mean
-
 def model_scores(y_true, y_pred):
     precision = precision_score(y_true, y_pred, pos_label=1)
     recall = recall_score(y_true, y_pred, pos_label=1)
@@ -32,9 +24,10 @@ def model_scores(y_true, y_pred):
 
 def main():
     args = parse_args()
-    stations, start_date, end_date, data_path, results_path, plot_data, config_path, models_path = (
+    (stations, start_date, end_date, data_path,
+     results_path, plot_data, config_path, models_path, window_size) = (
         args.stations, args.start_date, args.end_date, args.data_path,
-        args.results_path, args.plot_data, args.config_path, args.models_path)
+        args.results_path, args.plot_data, args.config_path, args.models_path, args.window_size)
 
     config_reader = ConfigReader(config_path)
 
@@ -71,8 +64,7 @@ def main():
         # If z_score is greater than 3, it is an outlier
         df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
 
-        # Reshape df to be a sliding window of 5 timesteps
-        df = WindowGenerator.split_window(df, 5)
+        df = WindowGenerator.split_window(df, window_size)
 
         trainer = Trainer(df)
         results = {}
@@ -200,6 +192,11 @@ def parse_args():
                         type=str,
                         help="Path to models folder, where models will be saved and loaded from."
                              "If not specified, models won't be saved.")
+    parser.add_argument("-w",
+                        "--window_size",
+                        type=int,
+                        help="Window size to use for sliding window",
+                        default=5)
 
     return parser.parse_args()
 
