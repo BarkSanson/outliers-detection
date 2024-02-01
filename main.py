@@ -103,9 +103,7 @@ def main():
         # Let df show all columns in describe
         pd.set_option('display.max_columns', None)
 
-        print(results_df.describe())
-
-        printer.print_scores(models, results)
+        printer.print_scores(models, results, window_size)
 
         # for model, res in results.items():
         #    best_model = res[0]
