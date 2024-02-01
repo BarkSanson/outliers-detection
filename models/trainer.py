@@ -20,4 +20,4 @@ class Trainer:
 
         model.fit(self._df)
 
-        return model, model.labels_
+        return model, model.decision_scores_
