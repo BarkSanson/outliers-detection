@@ -94,7 +94,7 @@ def main():
                     if window_size not in results:
                         results[window_size] = {}
 
-                    if model.name not in results:
+                    if model.name not in results[window_size]:
                         results[window_size][model.name] = []
 
                     results[window_size][model.name].append((params, precision, recall, f1))
