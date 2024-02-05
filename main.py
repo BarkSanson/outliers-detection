@@ -61,6 +61,8 @@ def main():
         # If z_score is greater than 3, it is an outlier
         df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
 
+        print("Number of outliers marked by Z-score:", df['outlier'].sum())
+
         results = {}
         for window_size in window_sizes:
             windowed_df = WindowGenerator.split_window(df, window_size)
