@@ -82,8 +82,10 @@ def main():
                             print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
                             labels, _ = serialized_model.labels_, serialized_model.decision_scores_
                         except FileNotFoundError:
+                            print(f"No model {model.name} with {kwargs} exists in {models_path}. Fitting and saving...")
                             _, labels, _ = trainer.fit_and_save(model.name, serializer, title, **kwargs)
                     else:
+                        print(f"No models_path specified. Fitting {model.name} with {kwargs} for {station}...")
                         # If no models_path is specified, just fit the model
                         _, labels, _ = trainer.fit(model.name, **kwargs)
 
