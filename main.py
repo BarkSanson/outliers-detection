@@ -97,14 +97,19 @@ def main():
                     if model.name not in results:
                         results[window_size][model.name] = []
 
-                    results[window_size][model.name].append((labels, *params, precision, recall, f1))
+                    results[window_size][model.name].append((params, precision, recall, f1))
 
         for res in results.values():
             for model, data in res.items():
                 data.sort(key=lambda x: x[-1], reverse=True)
 
-        for w_size, results in results.items():
-            printer.print_scores(models, results, w_size)
+        best_models = []
+        for window_size, res in results.items():
+            for model, data in res.items():
+                best_models.append((window_size, model, *data[0]))
+
+        best_models.sort(key=lambda x: x[-1], reverse=True)
+        printer.print_best_scores(best_models)
 
 
 def fit_and_save_model(model, trainer, serializer, title, station, **params):
