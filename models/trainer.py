@@ -20,4 +20,9 @@ class Trainer:
 
         model.fit(self._df)
 
-        return model, model.decision_scores_
+        return model, model.labels_, model.decision_scores_
+
+    def fit_and_save(self, name, serializer, title, **kwargs):
+        model, labels, decision_scores = self.fit(name, **kwargs)
+        serializer.save_model(model, title)
+        return model, labels, decision_scores
