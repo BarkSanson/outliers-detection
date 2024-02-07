@@ -8,16 +8,18 @@ import pandas as pd
 from sklearn.metrics import recall_score, precision_score, f1_score, confusion_matrix
 
 from data_fetch import Requester
-from models import Trainer, Serializer
+from models import BatchedTrainer, Serializer
 from config import ConfigReader
 from data_show import Plotter, Printer
 from window_generator import WindowGenerator
 
+ANOMALY_THRESHOLD = 0.4
+
 
 def model_scores(y_true, y_pred):
-    precision = precision_score(y_true, y_pred, pos_label=1)
-    recall = recall_score(y_true, y_pred, pos_label=1)
-    f1 = f1_score(y_true, y_pred, pos_label=1)
+    precision = precision_score(y_true, y_pred, pos_label=-1)
+    recall = recall_score(y_true, y_pred, pos_label=-1)
+    f1 = f1_score(y_true, y_pred, pos_label=-1)
 
     return precision, recall, f1
 
@@ -59,14 +61,15 @@ def main():
 
         df = df.drop(columns=['quality'])
 
+        wg = WindowGenerator(df, window_size)
+
         # Mark outliers
         z_scores = (df - df.mean()) / df.std()
         # If z_score is greater than 3, it is an outlier
-        df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
+        outliers_df = z_scores.map(lambda x: -1 if abs(x) > 3 else 1)
+        # df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
 
-        df = WindowGenerator.split_window(df, window_size)
-
-        trainer = Trainer(df)
+        trainer = BatchedTrainer(df, wg)
         results = {}
         for model in models:
             param_combinations = list(product(*model.params.values()))
@@ -75,22 +78,22 @@ def main():
                 title = f"{station}_{model.name}_outliers_with_{params}"
 
                 kwargs = dict(zip(model.params.keys(), params))
+                kwargs['anomaly_threshold'] = ANOMALY_THRESHOLD
 
                 if serializer:
                     try:
                         serialized_model = serializer.load_model(title)
                         print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
-                        labels, decision_scores = serialized_model.labels_, serialized_model.decision_scores_
+                        _, labels = serialized_model.labels_, serialized_model.decision_scores_
                     except FileNotFoundError:
-                        labels, decision_scores = fit_and_save_model(model, trainer, serializer, title, station,
-                                                                     **kwargs)
+                        _, labels = fit_and_save_model(model, trainer, serializer, title, station,
+                                                       **kwargs)
                 else:
-                    labels, decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
+                    _, labels = trainer.fit(model.name, **kwargs)
 
-                results_df[f'{model.name}_{params}_score'] = decision_scores
                 results_df[f'{model.name}_{params}_labels'] = labels
 
-                precision, recall, f1 = model_scores(df['outlier'], labels)
+                precision, recall, f1 = model_scores(outliers_df, labels)
 
                 if model.name not in results:
                     results[model.name] = []
@@ -154,11 +157,11 @@ def parse_dates(start_date, end_date):
 
 def fit_and_save_model(model, trainer, serializer, title, station, **params):
     print(f"Fitting {model.name} with {params} for {station}...")
-    trained_model, decision_scores = trainer.fit(model.name, **params)
+    trained_model, labels = trainer.fit(model.name, **params)
     print(f"Done fitting {model.name} with {params} for {station}!")
     serializer.save_model(trained_model, title)
 
-    return trained_model.labels_, decision_scores
+    return trained_model, labels
 
 
 def parse_args():
