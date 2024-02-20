@@ -7,6 +7,11 @@ class Printer:
         self._scores_path = os.path.join(results_path, "scores")
         os.makedirs(self._scores_path, exist_ok=True)
 
+    def print_values_with_scores(self, df, condition_target, title):
+        target_data = df[condition_target]
+
+        target_data.to_csv(os.path.join(self._scores_path, f'{title}.csv'))
+
     def print_scores(self, models, results, window_size):
         # Create a table with the accuracy of each model
         for model, res in results.items():
@@ -23,4 +28,3 @@ class Printer:
                     data,
                     headers=[*params_names, 'Precision', 'Recall', 'F1 score'],
                     tablefmt='orgtbl'))
-

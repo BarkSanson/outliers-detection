@@ -1,45 +1,27 @@
 import argparse
 import os
-import sys
-import datetime
-from itertools import product
 
+import numpy as np
 import pandas as pd
-from sklearn.metrics import recall_score, precision_score, f1_score, confusion_matrix
 
+from sklearn.metrics import roc_curve, auc
+
+from active_outlier_detection.detection_pipeline import KSBLWINIForest
 from data_fetch import Requester
-from models import Trainer, Serializer
-from config import ConfigReader
-from data_show import Plotter, Printer
-from window_generator import WindowGenerator
-
-
-def model_scores(y_true, y_pred):
-    precision = precision_score(y_true, y_pred, pos_label=1)
-    recall = recall_score(y_true, y_pred, pos_label=1)
-    f1 = f1_score(y_true, y_pred, pos_label=1)
-
-    return precision, recall, f1
+from data_show import Plotter
+from utils import dates
 
 
 def main():
     args = parse_args()
     (stations, start_date, end_date, data_path,
-     results_path, plot_data, config_path, models_path, window_size) = (
+     results_path, plot_data, config_path, models_path, window_sizes, n_trees) = (
         args.stations, args.start_date, args.end_date, args.data_path,
-        args.results_path, args.plot_data, args.config_path, args.models_path, args.window_size)
+        args.results_path, args.plot_data, args.config_path, args.models_path, args.window_sizes, args.n_trees)
 
-    config_reader = ConfigReader(config_path)
-
-    models = config_reader.read()
-
-    start_date, end_date = parse_dates(start_date, end_date)
+    start_date, end_date = dates.parse_dates(start_date, end_date)
 
     requester = Requester(stations, data_path, start_date.date(), end_date.date())
-
-    serializer = None
-    if models_path:
-        serializer = Serializer(models_path)
 
     dfs = requester.do_request()
 
@@ -47,118 +29,39 @@ def main():
         station_path = os.path.join(results_path, station.replace(' ', ''))
         os.makedirs(station_path, exist_ok=True)
 
-        results_df = pd.DataFrame()
-
         plots_path = os.path.join(station_path, 'plots')
 
-        printer = Printer(station_path)
-        plotter = Plotter(df, plots_path)
+        z_score = (df['value'] - df['value'].mean()) / df['value'].std()
+        df['outlier'] = z_score.abs() >= 3
 
-        if plot_data:
-            plotter.plot_data('value', f'{station} water level', 'quality')
+        plotter = Plotter(df, plots_path)
 
         df = df.drop(columns=['quality'])
 
-        # Mark outliers
-        z_scores = (df - df.mean()) / df.std()
-        # If z_score is greater than 3, it is an outlier
-        df['outlier'] = z_scores.map(lambda x: 1 if abs(x) > 3 else 0)
+        res = pd.DataFrame()
+        for window_size in window_sizes:
+            ksblwin_iforest = KSBLWINIForest(window_size=window_size)
 
-        df = WindowGenerator.split_window(df, window_size)
+            score_list = np.array([])
+            labels_list = np.array([])
+            for dt, element in df.iterrows():
+                scores, labels = ksblwin_iforest.run_pipe(element['value'])
 
-        trainer = Trainer(df)
-        results = {}
-        for model in models:
-            param_combinations = list(product(*model.params.values()))
+                if scores is not None:
+                    labels_list = np.concatenate([labels_list, labels])
+                    score_list = np.concatenate([score_list, scores])
 
-            for params in param_combinations:
-                title = f"{station}_{model.name}_outliers_with_{params}"
+            scores_series = pd.Series(score_list, index=df.index[:len(score_list)], name="scores")
+            labels_series = pd.Series(labels_list, index=df.index[:len(labels_list)], name="labels")
+            res[f"score_w{window_size}"] = scores_series
+            res[f"label_w{window_size}"] = labels_series
 
-                kwargs = dict(zip(model.params.keys(), params))
-
-                if serializer:
-                    try:
-                        serialized_model = serializer.load_model(title)
-                        print(f"Model {model.name} exists in {models_path} with {kwargs}. Loading...")
-                        labels, decision_scores = serialized_model.labels_, serialized_model.decision_scores_
-                    except FileNotFoundError:
-                        labels, decision_scores = fit_and_save_model(model, trainer, serializer, title, station,
-                                                                     **kwargs)
-                else:
-                    labels, decision_scores = fit_and_save_model(model, trainer, serializer, title, station, **kwargs)
-
-                results_df[f'{model.name}_{params}_score'] = decision_scores
-                results_df[f'{model.name}_{params}_labels'] = labels
-
-                precision, recall, f1 = model_scores(df['outlier'], labels)
-
-                if model.name not in results:
-                    results[model.name] = []
-
-                results[model.name].append((labels, *params, precision, recall, f1))
-
-        for res in results.values():
-            res.sort(key=lambda x: x[-1], reverse=True)
-
-        # Let df show all columns in describe
-        pd.set_option('display.max_columns', None)
-
-        printer.print_scores(models, results, window_size)
-
-        # for model, res in results.items():
-        #    best_model = res[0]
-        #    params = tuple(best_model[1:-3])
-
-        #    outliers = df[df[f'{model}_{params}_labels'] == 1]
-        #    plotter.plot_model_outliers(df, outliers, model, params)
-
-        # cf_matrix = confusion_matrix(df['outlier'], df[f'{model}_{params}_labels'])
-        # plotter.plot_confusion_matrix(cf_matrix, model, params)
-
-        # For each best model, print the score given to each outlier
-        # best_models = []
-        # for model, res in results.items():
-        #    best_model = res[0]
-        #    params = tuple(best_model[1:-1])
-
-        #    best_models.append(f'{model}_{params}_labels')
-
-        # plotter.plot_outliers_score_per_model(df, best_models)
+            fpr, tpr, thresholds = \
+                roc_curve(df[:len(score_list)]['outlier'], res[:len(score_list)][f"score_w{window_size}"])
+            roc_auc = auc(fpr, tpr)
+            plotter.plot_roc_auc(fpr, tpr, roc_auc, f"{station} ROC AUC for window size {window_size}")
 
 
-def parse_dates(start_date, end_date):
-    try:
-        start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-        end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-    except ValueError:
-        print('Invalid date format. Please use YYYY-MM-DD.')
-        sys.exit(1)
-
-    # Check if start date is before today
-    if start_date > datetime.datetime.today():
-        print('Start date must be before today.')
-        sys.exit(1)
-
-    # Check if end date is before today
-    if end_date >= datetime.datetime.today():
-        print('End date must be before today.')
-        sys.exit(1)
-
-    # Check if start date is before end date
-    if start_date > end_date:
-        print('Start date must be before end date.')
-        sys.exit(1)
-
-    return start_date, end_date
-
-
-def fit_and_save_model(model, trainer, serializer, title, station, **params):
-    print(f"Fitting {model.name} with {params} for {station}...")
-    trained_model, decision_scores = trainer.fit(model.name, **params)
-    print(f"Done fitting {model.name} with {params} for {station}!")
-    serializer.save_model(trained_model, title)
-
-    return trained_model.labels_, decision_scores
 
 
 def parse_args():
@@ -184,17 +87,24 @@ def parse_args():
                         "--config_path",
                         type=str,
                         help="Path to config file",
-                        required=True)
+                        required=False)
     parser.add_argument("-m",
                         "--models_path",
                         type=str,
                         help="Path to models folder, where models will be saved and loaded from."
                              "If not specified, models won't be saved.")
     parser.add_argument("-w",
-                        "--window_size",
+                        "--window_sizes",
                         type=int,
-                        help="Window size to use for sliding window",
-                        default=5)
+                        nargs="*",
+                        help="Window sizes to use for block window. Default is 50",
+                        default=[50])
+    parser.add_argument("-t",
+                        "--n_trees",
+                        type=int,
+                        nargs="*",
+                        help="Number of trees in the isolation forest. Default is 100",
+                        default=[100])
 
     return parser.parse_args()
 
